@@ -21,27 +21,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def create_dataloaders(data_root, zones, batch_size=32, val_split=0.2):
-    """创建数据加载器"""
-    from src.data.load_renewable_dataset import TimeSeriesDataset
-    from torch.utils.data import DataLoader, random_split
-    
-    loader = LoadRenewableDataLoader(data_root)
-    data = loader.load_multiple_zones(zones)
-    
-    dataset = TimeSeriesDataset(data, seq_len=720)
-    
-    # 数据集分割
-    val_size = int(len(dataset) * val_split)
-    train_size = len(dataset) - val_size
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-    
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-    
-    return train_loader, val_loader
-
-
 def main():
     parser = argparse.ArgumentParser(description='Spikformer预训练 - 带评估指标')
     

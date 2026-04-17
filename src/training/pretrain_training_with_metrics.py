@@ -298,7 +298,7 @@ class TrainerWithMetrics:
             total_proximity += output['proximity'].mean().item()
             num_batches += 1
             
-            pbar.set_postfix({'loss': loss.item():.4f})
+            pbar.set_postfix({'loss': f'{loss.item():.4f}'})
         
         avg_loss = total_loss / num_batches
         avg_proximity = total_proximity / num_batches
@@ -340,7 +340,7 @@ class TrainerWithMetrics:
                 all_proximities.append(output['proximity'].cpu().numpy())
                 
                 num_batches += 1
-                pbar.set_postfix({'loss': loss.item():.4f})
+                pbar.set_postfix({'loss': f'{loss.item():.4f}'})
         
         avg_loss = total_loss / num_batches
         avg_proximity = total_proximity / num_batches
@@ -440,3 +440,40 @@ class TrainerWithMetrics:
         self.metrics_tracker.plot(results_dir)
         
         return self.metrics_tracker
+
+
+def create_dataloaders(data_root, zones, batch_size=32, val_split=0.2):
+    """
+    创建数据加载器
+    
+    Args:
+        data_root: 数据根目录
+        zones: 地区列表或数量（当前版本会加载所有地区）
+        batch_size: 批次大小
+        val_split: 验证集比例
+        
+    Returns:
+        train_loader, val_loader: 训练和验证数据加载器
+    """
+    from torch.utils.data import random_split
+    
+    loader = LoadRenewableDataLoader(data_root)
+    # 加载所有地区的数据
+    all_zones_data = loader.load_all_zones()
+    data = all_zones_data
+    
+    dataset = TimeSeriesDataset(data, seq_len=720)
+    
+    # 数据集分割
+    val_size = int(len(dataset) * val_split)
+    train_size = len(dataset) - val_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    
+    logger.info(f"✅ 数据加载器创建完成")
+    logger.info(f"   训练集: {len(train_dataset)} samples")
+    logger.info(f"   验证集: {len(val_dataset)} samples")
+    
+    return train_loader, val_loader
