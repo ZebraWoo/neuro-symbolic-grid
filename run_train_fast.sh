@@ -13,6 +13,13 @@ echo "=================================="
 echo "配置: 4个CAISO区域 + 30 epochs"
 echo "显存: ~18GB/GPU"
 echo "时间: ~3-4小时"
+GPU_ID="${GPU_ID:-0}"
+BATCH_SIZE="${BATCH_SIZE:-128}"
+SEQ_LEN="${SEQ_LEN:-1440}"
+HIDDEN_DIM="${HIDDEN_DIM:-512}"
+EMBEDDING_DIM="${EMBEDDING_DIM:-256}"
+echo "GPU: ${GPU_ID}"
+echo "batch_size: ${BATCH_SIZE}, seq_len: ${SEQ_LEN}, hidden_dim: ${HIDDEN_DIM}, embedding_dim: ${EMBEDDING_DIM}"
 echo "=================================="
 echo ""
 
@@ -31,12 +38,12 @@ mkdir -p checkpoints/spikformer_pretrain
 echo "⏱️  开始训练（请稍候，这会花费3-4小时）..."
 echo ""
 
-python train_pretrain.py \
+CUDA_VISIBLE_DEVICES="${GPU_ID}" python train_pretrain.py \
     --zones CAISO_zone_1_ CAISO_zone_2_ CAISO_zone_3_ CAISO_zone_4_ \
-    --batch-size 128 \
-    --hidden-dim 512 \
-    --embedding-dim 256 \
-    --seq-len 1440 \
+    --batch-size "${BATCH_SIZE}" \
+    --hidden-dim "${HIDDEN_DIM}" \
+    --embedding-dim "${EMBEDDING_DIM}" \
+    --seq-len "${SEQ_LEN}" \
     --learning-rate 5e-4 \
     --num-epochs 30 \
     --checkpoint-dir ./checkpoints/spikformer_pretrain_fast \

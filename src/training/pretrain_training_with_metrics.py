@@ -1,5 +1,5 @@
 """
-改进的预训练训练脚本 - 包含实时评估指标（AUC、Precision、Recall等）
+Improved pretraining script with real-time evaluation metrics.
 """
 
 import torch
@@ -27,14 +27,14 @@ from src.data.load_renewable_dataset import TimeSeriesDataset, LoadRenewableData
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# 设置绘图风格
+# Plot style
 sns.set_style("whitegrid")
 plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
 
 class MetricsTracker:
-    """训练指标追踪器"""
+    """Track training metrics."""
     
     def __init__(self):
         self.train_loss = []
@@ -43,9 +43,9 @@ class MetricsTracker:
         self.val_precision = []
         self.val_recall = []
         self.val_f1 = []
-        self.val_silhouette = []  # 聚类质量指标
-        self.train_proximity = []  # 训练时的接近度
-        self.val_proximity = []    # 验证时的接近度
+        self.val_silhouette = []
+        self.train_proximity = []
+        self.val_proximity = []
     
     def add_train(self, loss, proximity):
         self.train_loss.append(loss)
@@ -67,7 +67,7 @@ class MetricsTracker:
             self.val_proximity.append(proximity)
     
     def to_dict(self):
-        """转换为字典"""
+        """Convert metrics to a dict."""
         return {
             'train_loss': self.train_loss,
             'val_loss': self.val_loss,
@@ -81,25 +81,25 @@ class MetricsTracker:
         }
     
     def plot(self, output_dir='./results'):
-        """绘制所有指标"""
+        """Plot all tracked metrics."""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # 1. 损失曲线
+        # 1. Loss curves
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(self.train_loss, label='训练损失', linewidth=2, marker='o', markersize=4)
-        ax.plot(self.val_loss, label='验证损失', linewidth=2, marker='s', markersize=4)
+        ax.plot(self.train_loss, label='Train Loss', linewidth=2, marker='o', markersize=4)
+        ax.plot(self.val_loss, label='Validation Loss', linewidth=2, marker='s', markersize=4)
         ax.set_xlabel('Epoch', fontsize=12)
         ax.set_ylabel('Loss', fontsize=12)
-        ax.set_title('训练和验证损失', fontsize=14, fontweight='bold')
+        ax.set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
         ax.legend(fontsize=11)
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(output_dir / 'loss_curve.png', dpi=150)
         plt.close()
-        logger.info(f"✅ 损失曲线已保存: {output_dir / 'loss_curve.png'}")
+        logger.info(f"[OK] Saved loss curve: {output_dir / 'loss_curve.png'}")
         
-        # 2. 评估指标
+        # 2. Evaluation metrics
         if self.val_auc or self.val_precision or self.val_recall or self.val_f1:
             fig, axes = plt.subplots(2, 2, figsize=(14, 10))
             
@@ -111,29 +111,29 @@ class MetricsTracker:
                 axes[0, 0].set_ylim([0, 1.05])
                 axes[0, 0].grid(True, alpha=0.3)
             else:
-                axes[0, 0].text(0.5, 0.5, '未计算AUC', ha='center', va='center')
+                axes[0, 0].text(0.5, 0.5, 'AUC not available', ha='center', va='center')
                 axes[0, 0].set_title('AUC', fontsize=12, fontweight='bold')
             
             # Precision
             if self.val_precision:
                 axes[0, 1].plot(self.val_precision, marker='s', linewidth=2, color='#ff7f0e')
-                axes[0, 1].set_title('Precision (精确率)', fontsize=12, fontweight='bold')
+                axes[0, 1].set_title('Precision', fontsize=12, fontweight='bold')
                 axes[0, 1].set_ylabel('Precision', fontsize=11)
                 axes[0, 1].set_ylim([0, 1.05])
                 axes[0, 1].grid(True, alpha=0.3)
             else:
-                axes[0, 1].text(0.5, 0.5, '未计算Precision', ha='center', va='center')
+                axes[0, 1].text(0.5, 0.5, 'Precision not available', ha='center', va='center')
                 axes[0, 1].set_title('Precision', fontsize=12, fontweight='bold')
             
             # Recall
             if self.val_recall:
                 axes[1, 0].plot(self.val_recall, marker='^', linewidth=2, color='#2ca02c')
-                axes[1, 0].set_title('Recall (召回率)', fontsize=12, fontweight='bold')
+                axes[1, 0].set_title('Recall', fontsize=12, fontweight='bold')
                 axes[1, 0].set_ylabel('Recall', fontsize=11)
                 axes[1, 0].set_ylim([0, 1.05])
                 axes[1, 0].grid(True, alpha=0.3)
             else:
-                axes[1, 0].text(0.5, 0.5, '未计算Recall', ha='center', va='center')
+                axes[1, 0].text(0.5, 0.5, 'Recall not available', ha='center', va='center')
                 axes[1, 0].set_title('Recall', fontsize=12, fontweight='bold')
             
             # F1
@@ -144,54 +144,54 @@ class MetricsTracker:
                 axes[1, 1].set_ylim([0, 1.05])
                 axes[1, 1].grid(True, alpha=0.3)
             else:
-                axes[1, 1].text(0.5, 0.5, '未计算F1', ha='center', va='center')
+                axes[1, 1].text(0.5, 0.5, 'F1 not available', ha='center', va='center')
                 axes[1, 1].set_title('F1-Score', fontsize=12, fontweight='bold')
             
             for ax in axes.flat:
                 ax.set_xlabel('Epoch', fontsize=11)
             
-            plt.suptitle('评估指标曲线', fontsize=14, fontweight='bold', y=1.00)
+            plt.suptitle('Evaluation Metrics', fontsize=14, fontweight='bold', y=1.00)
             plt.tight_layout()
             plt.savefig(output_dir / 'metrics_curve.png', dpi=150)
             plt.close()
-            logger.info(f"✅ 评估指标已保存: {output_dir / 'metrics_curve.png'}")
+            logger.info(f"[OK] Saved metrics curve: {output_dir / 'metrics_curve.png'}")
         
-        # 3. 聚类质量和接近度
+        # 3. Clustering quality and proximity
         if self.val_silhouette or self.val_proximity:
             fig, axes = plt.subplots(1, 2, figsize=(14, 5))
             
             # Silhouette Score
             if self.val_silhouette:
                 axes[0].plot(self.val_silhouette, marker='o', linewidth=2, color='purple')
-                axes[0].set_title('Silhouette Score (聚类质量)', fontsize=12, fontweight='bold')
+                axes[0].set_title('Silhouette Score', fontsize=12, fontweight='bold')
                 axes[0].set_ylabel('Silhouette Score', fontsize=11)
                 axes[0].set_ylim([-1, 1])
                 axes[0].axhline(y=0, color='r', linestyle='--', alpha=0.5)
                 axes[0].grid(True, alpha=0.3)
             else:
-                axes[0].text(0.5, 0.5, '未计算Silhouette', ha='center', va='center')
+                axes[0].text(0.5, 0.5, 'Silhouette not available', ha='center', va='center')
                 axes[0].set_title('Silhouette Score', fontsize=12, fontweight='bold')
             
             # Proximity
             if self.train_proximity and self.val_proximity:
-                axes[1].plot(self.train_proximity, label='训练接近度', marker='o', linewidth=2)
-                axes[1].plot(self.val_proximity, label='验证接近度', marker='s', linewidth=2)
-                axes[1].set_title('接近度 (Proximity)', fontsize=12, fontweight='bold')
+                axes[1].plot(self.train_proximity, label='Train Proximity', marker='o', linewidth=2)
+                axes[1].plot(self.val_proximity, label='Validation Proximity', marker='s', linewidth=2)
+                axes[1].set_title('Proximity', fontsize=12, fontweight='bold')
                 axes[1].set_ylabel('Proximity Score', fontsize=11)
                 axes[1].legend(fontsize=10)
                 axes[1].grid(True, alpha=0.3)
             else:
-                axes[1].text(0.5, 0.5, '未计算接近度', ha='center', va='center')
-                axes[1].set_title('接近度 (Proximity)', fontsize=12, fontweight='bold')
+                axes[1].text(0.5, 0.5, 'Proximity not available', ha='center', va='center')
+                axes[1].set_title('Proximity', fontsize=12, fontweight='bold')
             
             axes[0].set_xlabel('Epoch', fontsize=11)
             axes[1].set_xlabel('Epoch', fontsize=11)
             
-            plt.suptitle('聚类和异常检测指标', fontsize=14, fontweight='bold', y=1.00)
+            plt.suptitle('Clustering and Anomaly Metrics', fontsize=14, fontweight='bold', y=1.00)
             plt.tight_layout()
             plt.savefig(output_dir / 'clustering_metrics.png', dpi=150)
             plt.close()
-            logger.info(f"✅ 聚类指标已保存: {output_dir / 'clustering_metrics.png'}")
+            logger.info(f"[OK] Saved clustering metrics: {output_dir / 'clustering_metrics.png'}")
 
 
 def compute_auc_from_proximity(proximities: np.ndarray, labels: np.ndarray = None) -> float:
@@ -248,13 +248,13 @@ def compute_metrics_from_clustering(embeddings: np.ndarray, n_clusters: int = 10
             metrics['f1'] = f1
     
     except Exception as e:
-        logger.warning(f"计算聚类指标时出错: {e}")
+        logger.warning(f"Failed to compute clustering metrics: {e}")
     
     return metrics
 
 
 class TrainerWithMetrics:
-    """包含评估指标的训练器"""
+    """Trainer with evaluation metrics."""
     
     def __init__(self, model, device='cuda', learning_rate=1e-3):
         self.model = model.to(device)
@@ -264,14 +264,13 @@ class TrainerWithMetrics:
         self.metrics_tracker = MetricsTracker()
     
     def train_epoch(self, train_loader) -> float:
-        """训练一个epoch"""
+        """Train for one epoch."""
         self.model.train()
         total_loss = 0
         total_proximity = 0
         num_batches = 0
         
-        pbar = tqdm(train_loader, desc='Training', leave=False)
-        for batch in pbar:
+        for batch in train_loader:
             if isinstance(batch, (tuple, list)):
                 x = batch[0]
             else:
@@ -287,8 +286,16 @@ class TrainerWithMetrics:
             self.optimizer.zero_grad()
             output = self.model(x)
             
-            # 简单的重建损失
-            loss = self.loss_fn(output['encoded'], x.unsqueeze(-1).expand_as(output['encoded']))
+            # 损失：使用编码向量作为自监督目标
+            # 对编码序列进行全局池化，计算与自身的对比损失
+            encoded = output['encoded']  # (batch, seq_len, hidden_dim)
+            
+            # 计算编码序列的平均值和方差作为目标
+            encoded_mean = encoded.mean(dim=1, keepdim=True)  # (batch, 1, hidden_dim)
+            target = encoded_mean.expand_as(encoded)  # (batch, seq_len, hidden_dim)
+            
+            # 使用MSE损失
+            loss = self.loss_fn(encoded, target)
             
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
@@ -298,15 +305,13 @@ class TrainerWithMetrics:
             total_proximity += output['proximity'].mean().item()
             num_batches += 1
             
-            pbar.set_postfix({'loss': f'{loss.item():.4f}'})
-        
         avg_loss = total_loss / num_batches
         avg_proximity = total_proximity / num_batches
         
         return avg_loss, avg_proximity
     
     def validate(self, val_loader) -> Dict[str, float]:
-        """验证"""
+        """Run validation."""
         self.model.eval()
         total_loss = 0
         total_proximity = 0
@@ -315,8 +320,7 @@ class TrainerWithMetrics:
         num_batches = 0
         
         with torch.no_grad():
-            pbar = tqdm(val_loader, desc='Validating', leave=False)
-            for batch in pbar:
+            for batch in val_loader:
                 if isinstance(batch, (tuple, list)):
                     x = batch[0]
                 else:
@@ -331,7 +335,11 @@ class TrainerWithMetrics:
                 
                 output = self.model(x)
                 
-                loss = self.loss_fn(output['encoded'], x.unsqueeze(-1).expand_as(output['encoded']))
+                # 与训练阶段保持一致：用编码序列的全局均值构造自监督目标
+                encoded = output['encoded']  # (batch, seq_len, hidden_dim)
+                encoded_mean = encoded.mean(dim=1, keepdim=True)  # (batch, 1, hidden_dim)
+                target = encoded_mean.expand_as(encoded)  # (batch, seq_len, hidden_dim)
+                loss = self.loss_fn(encoded, target)
                 
                 total_loss += loss.item()
                 total_proximity += output['proximity'].mean().item()
@@ -340,8 +348,6 @@ class TrainerWithMetrics:
                 all_proximities.append(output['proximity'].cpu().numpy())
                 
                 num_batches += 1
-                pbar.set_postfix({'loss': f'{loss.item():.4f}'})
-        
         avg_loss = total_loss / num_batches
         avg_proximity = total_proximity / num_batches
         
@@ -366,7 +372,7 @@ class TrainerWithMetrics:
         return metrics
     
     def fit(self, train_loader, val_loader, num_epochs=10, checkpoint_dir='./checkpoints'):
-        """完整训练循环"""
+        """Full training loop."""
         checkpoint_dir = Path(checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
@@ -394,8 +400,8 @@ class TrainerWithMetrics:
             )
             
             # 打印指标
-            logger.info(f"训练损失: {train_loss:.4f}, 训练接近度: {train_proximity:.4f}")
-            logger.info(f"验证损失: {val_metrics['loss']:.4f}, 验证接近度: {val_metrics.get('proximity', 0):.4f}")
+            logger.info(f"Train loss: {train_loss:.6e}, train proximity: {train_proximity:.6f}")
+            logger.info(f"Validation loss: {val_metrics['loss']:.6e}, validation proximity: {val_metrics.get('proximity', 0):.6f}")
             
             if 'auc' in val_metrics:
                 logger.info(f"AUC: {val_metrics['auc']:.4f}")
@@ -415,7 +421,7 @@ class TrainerWithMetrics:
                     'loss': val_metrics['loss'],
                     'metrics': self.metrics_tracker.to_dict(),
                 }, checkpoint_path)
-                logger.info(f"✅ 最佳模型已保存: {checkpoint_path}")
+                logger.info(f"[OK] Saved best model: {checkpoint_path}")
             
             # 定期保存检查点
             if (epoch + 1) % 5 == 0:
@@ -427,13 +433,13 @@ class TrainerWithMetrics:
                     'loss': val_metrics['loss'],
                     'metrics': self.metrics_tracker.to_dict(),
                 }, checkpoint_path)
-                logger.info(f"✅ 检查点已保存: {checkpoint_path}")
+                logger.info(f"[OK] Saved checkpoint: {checkpoint_path}")
         
         # 保存指标和绘图
         metrics_json = checkpoint_dir / 'metrics.json'
         with open(metrics_json, 'w') as f:
             json.dump(self.metrics_tracker.to_dict(), f, indent=2)
-        logger.info(f"✅ 指标已保存: {metrics_json}")
+        logger.info(f"[OK] Saved metrics: {metrics_json}")
         
         # 绘制图表
         results_dir = Path('./results')
@@ -442,7 +448,7 @@ class TrainerWithMetrics:
         return self.metrics_tracker
 
 
-def create_dataloaders(data_root, zones, batch_size=32, val_split=0.2):
+def create_dataloaders(data_root, zones, batch_size=32, val_split=0.2, seq_len=720):
     """
     创建数据加载器
     
@@ -464,14 +470,55 @@ def create_dataloaders(data_root, zones, batch_size=32, val_split=0.2):
         for x, info in batch:
             sequences.append(torch.FloatTensor(x))
         return torch.stack(sequences)
+
+    def resolve_zones(available_zones, requested_zones):
+        """
+        将用户输入的区域选择解析为具体zone列表。
+        支持：
+        - 精确zone名：CAISO_zone_1_
+        - 网格前缀：CAISO / ERCOT / MISO
+        """
+        if not requested_zones:
+            return sorted(available_zones)
+
+        resolved = []
+        seen = set()
+        available_sorted = sorted(available_zones)
+
+        for item in requested_zones:
+            token = item.strip()
+            if not token:
+                continue
+
+            # 1) 精确匹配
+            exact_matches = [z for z in available_sorted if z == token]
+            # 2) 前缀匹配（支持 ERCOT、MISO、CAISO 这类输入）
+            if not exact_matches:
+                prefix_matches = [z for z in available_sorted if z.startswith(token)]
+                if not prefix_matches and not token.endswith('_'):
+                    prefix_matches = [z for z in available_sorted if z.startswith(f"{token}_")]
+            else:
+                prefix_matches = exact_matches
+
+            for zone in prefix_matches:
+                if zone not in seen:
+                    seen.add(zone)
+                    resolved.append(zone)
+
+        return resolved
     
     loader = LoadRenewableDataLoader(data_root)
-    # 加载所有地区的数据
-    all_zones_data = loader.load_all_zones()
-    # 合并所有区域数据为一个DataFrame
-    data = pd.concat(list(all_zones_data.values()), axis=0, ignore_index=True)
-    
-    dataset = TimeSeriesDataset(data, seq_len=720)
+    selected_zones = resolve_zones(loader.zones.keys(), zones)
+    if not selected_zones:
+        raise ValueError(
+            f"No matching zones found. Requested: {zones}, examples: {list(sorted(loader.zones.keys()))[:10]}"
+        )
+
+    logger.info(f"Loading {len(selected_zones)} zones: {selected_zones}")
+    selected_frames = [loader.load_zone(zone_name) for zone_name in selected_zones]
+    data = pd.concat(selected_frames, axis=0, ignore_index=True)
+
+    dataset = TimeSeriesDataset(data, seq_len=seq_len)
     
     # 数据集分割
     val_size = int(len(dataset) * val_split)
@@ -481,8 +528,8 @@ def create_dataloaders(data_root, zones, batch_size=32, val_split=0.2):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, collate_fn=collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=collate_fn)
     
-    logger.info(f"✅ 数据加载器创建完成")
-    logger.info(f"   训练集: {len(train_dataset)} samples")
-    logger.info(f"   验证集: {len(val_dataset)} samples")
+    logger.info("[OK] Data loaders created")
+    logger.info(f"   Train set: {len(train_dataset)} samples")
+    logger.info(f"   Validation set: {len(val_dataset)} samples")
     
     return train_loader, val_loader

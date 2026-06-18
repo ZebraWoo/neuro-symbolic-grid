@@ -7,9 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Tuple, Optional, List
-from .neuron_models import (
-    LeakyIntegrateFire, StaticSynapse, DynamicSynapse
-)
+from .neuron_models import TemporalLIF
 
 
 class MultimodalEmbedding(nn.Module):
@@ -82,6 +80,35 @@ class MultimodalEmbedding(nn.Module):
         
         return fused_embedding, modality_weights
 
+    def forward_temporal(
+        self, modalities_data: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Batched over time — avoids Python loop over seq_len in MultimodalControlNetwork.
+
+        Args:
+            modalities_data: {name: (batch, seq_len, input_dim)}
+        Returns:
+            fused: (batch, seq_len, embedding_dim)
+            modality_weights: (batch, seq_len, num_modalities) — weights from first step kept for API compat
+        """
+        first = next(iter(modalities_data.values()))
+        batch_size, seq_len, _ = first.shape
+        embeddings = []
+        for modality_name in self.modalities.keys():
+            x = modalities_data[modality_name].reshape(batch_size * seq_len, -1)
+            emb = self.encoders[modality_name](x).reshape(batch_size, seq_len, self.embedding_dim)
+            embeddings.append(emb)
+
+        concat_emb = torch.cat(embeddings, dim=-1)  # (B, T, M*E)
+        flat = concat_emb.reshape(batch_size * seq_len, -1)
+        modality_weights = self.fusion_gate(flat).reshape(batch_size, seq_len, -1)
+
+        stacked_emb = torch.stack(embeddings, dim=2)  # (B, T, M, E)
+        weights_expanded = modality_weights.unsqueeze(-1)
+        fused = (stacked_emb * weights_expanded).sum(dim=2)
+        return fused, modality_weights[:, 0, :]
+
 
 class SpikeFormerControlBlock(nn.Module):
     """
@@ -94,19 +121,31 @@ class SpikeFormerControlBlock(nn.Module):
         feature_dim: int,
         num_heads: int = 4,
         hidden_dim: int = 128,
-        num_lif_neurons: int = 64
+        num_lif_neurons: int = 64,
+        use_lif: bool = False,
+        lif_threshold: float = 1.0,
+        lif_leak: float = 0.9,
     ):
         super().__init__()
         self.feature_dim = feature_dim
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
+        self.use_lif = use_lif
         
-        # 自注意力层
-        self.multi_head_attn = nn.MultiheadAttention(
-            embed_dim=feature_dim,
-            num_heads=num_heads,
-            batch_first=True
-        )
+        # 自注意力层 (batch_first requires PyTorch >= 1.9)
+        try:
+            self.multi_head_attn = nn.MultiheadAttention(
+                embed_dim=feature_dim,
+                num_heads=num_heads,
+                batch_first=True,
+            )
+            self._attn_batch_first = True
+        except TypeError:
+            self.multi_head_attn = nn.MultiheadAttention(
+                embed_dim=feature_dim,
+                num_heads=num_heads,
+            )
+            self._attn_batch_first = False
         self.attn_norm = nn.LayerNorm(feature_dim)
         
         # 前馈网络
@@ -117,14 +156,9 @@ class SpikeFormerControlBlock(nn.Module):
         )
         self.ff_norm = nn.LayerNorm(feature_dim)
         
-        # 脉冲神经元层（用于判决）
-        self.lif_neurons = nn.ModuleList([
-            LeakyIntegrateFire(feature_dim, tau=2.0)
-            for _ in range(num_lif_neurons)
-        ])
-        
-        # LIF输出聚合
-        self.lif_aggregate = nn.Linear(num_lif_neurons, feature_dim)
+        # 时序 LIF（与 snn_mlp demo 同族，支持 batch×time）
+        self.temporal_lif = TemporalLIF(threshold=lif_threshold, leak=lif_leak)
+        self.lif_scale = 0.3
     
     def forward(
         self,
@@ -141,43 +175,24 @@ class SpikeFormerControlBlock(nn.Module):
             spike_rates: 各LIF神经元的发火率
         """
         # 自注意力
-        attn_out, _ = self.multi_head_attn(
-            x, x, x, 
-            attn_mask=attention_mask,
-            average_attn_weights=False
-        )
+        q = x if self._attn_batch_first else x.transpose(0, 1)
+        attn_out, _ = self.multi_head_attn(q, q, q, attn_mask=attention_mask)
+        if not self._attn_batch_first:
+            attn_out = attn_out.transpose(0, 1)
         x = self.attn_norm(x + attn_out)
         
         # 前馈网络
         ff_out = self.feed_forward(x)
         x = self.ff_norm(x + ff_out)
         
-        # 脉冲神经元决策层
-        batch_size, seq_len, feature_dim = x.shape
-        spike_rates = []
-        
-        spike_outputs = []
-        for i, lif in enumerate(self.lif_neurons):
-            # 为每个LIF神经元处理序列
-            neuron_output = []
-            for t in range(seq_len):
-                spike, _ = lif(x[:, t, :].unsqueeze(1))
-                neuron_output.append(spike)
-            
-            spike_rate = torch.mean(torch.cat(neuron_output, dim=1), dim=1)
-            spike_rates.append(spike_rate)
-            spike_outputs.append(torch.cat(neuron_output, dim=1))
-        
-        # (batch_size, seq_len, num_lif_neurons)
-        lif_output = torch.stack(spike_outputs, dim=2)
-        lif_output = lif_output.reshape(batch_size, seq_len, -1)
-        
-        # 聚合LIF输出
-        lif_output = self.lif_aggregate(lif_output)
-        
-        # 最终输出：结合注意力和脉冲输出
-        output = x + 0.3 * lif_output
-        
+        spike_rates: List[torch.Tensor] = []
+        if not self.use_lif:
+            return x, spike_rates
+
+        spikes = self.temporal_lif(x)
+        mean_rate = spikes.mean(dim=(1, 2))
+        spike_rates = [mean_rate]
+        output = x + self.lif_scale * spikes
         return output, spike_rates
 
 
@@ -196,7 +211,10 @@ class MultimodalControlNetwork(nn.Module):
         embedding_dim: int = 32,
         num_blocks: int = 4,
         num_control_outputs: int = 5,  # 频率、电压、负荷、应急、预留
-        seq_len: int = 720
+        seq_len: int = 720,
+        use_lif_in_blocks: bool = False,
+        lif_threshold: float = 1.0,
+        lif_leak: float = 0.9,
     ):
         super().__init__()
         self.modalities = modalities
@@ -219,7 +237,10 @@ class MultimodalControlNetwork(nn.Module):
                 feature_dim=embedding_dim,
                 num_heads=4,
                 hidden_dim=hidden_dim,
-                num_lif_neurons=32
+                num_lif_neurons=32,
+                use_lif=use_lif_in_blocks,
+                lif_threshold=lif_threshold,
+                lif_leak=lif_leak,
             )
             for _ in range(num_blocks)
         ])
@@ -284,25 +305,10 @@ class MultimodalControlNetwork(nn.Module):
             else:  # (batch_size, seq_len, input_dim)
                 processed_data[modality_name] = data
         
-        # 多模态嵌入
-        all_embeddings = []
-        modality_weights_list = []
-        
-        for i in range(self.seq_len):
-            # 提取时刻i的各模态数据
-            t_data = {
-                name: processed_data[name][:, i, :]
-                for name in self.modalities.keys()
-            }
-            
-            # 嵌入和融合
-            t_emb, t_weights = self.multimodal_embedding(t_data)
-            all_embeddings.append(t_emb)
-            if i == 0:
-                modality_weights = t_weights
-        
-        # (batch_size, seq_len, embedding_dim)
-        embedded_seq = torch.stack(all_embeddings, dim=1)
+        # 多模态嵌入（整段序列一次前向，替代逐时刻 Python 循环）
+        embedded_seq, modality_weights = self.multimodal_embedding.forward_temporal(
+            processed_data
+        )
         
         # 加位置编码
         pos_enc = self.pos_encoding[:, :self.seq_len, :].to(embedded_seq.device)
@@ -376,7 +382,9 @@ class ControlPretrainingLoss(nn.Module):
         """
         # (batch_size, seq_len, embedding_dim)
         batch_size, seq_len, _ = embeddings.shape
-        
+        if seq_len < 2:
+            return embeddings.new_tensor(0.0)
+
         loss = 0
         for t in range(seq_len - 1):
             # 当前时刻 vs 下一时刻
@@ -402,9 +410,11 @@ class ControlPretrainingLoss(nn.Module):
         # control_actions: (batch_size, seq_len, num_control_outputs)
         if control_actions.dim() == 2:
             control_actions = control_actions.unsqueeze(1)
-        
+
         batch_size, seq_len, num_outputs = control_actions.shape
-        
+        if seq_len < 2:
+            return control_actions.new_tensor(0.0)
+
         loss = 0
         for t in range(seq_len - 1):
             curr = control_actions[:, t, :]

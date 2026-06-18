@@ -63,207 +63,33 @@ fi
 print_info "创建输出目录..."
 mkdir -p logs checkpoints outputs
 
-# 生成Python训练脚本
-print_info "生成训练脚本..."
+DATA_ROOT="${DATA_ROOT:-/home/wuzuoxu/Data/PSML/Minute-level Load and Renewable}"
+ZONES="${ZONES:-ERCOT_zone_1_}"
+SEQ_LEN="${SEQ_LEN:-96}"
+STRIDE="${STRIDE:-96}"
+MAX_ROWS="${MAX_ROWS:-}"
 
-cat > train_control.py << 'PYTHON_SCRIPT'
-"""
-电网自主调控模型训练脚本
-"""
-import torch
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-import argparse
-import json
-from pathlib import Path
-import sys
+# 运行训练（PSML 多模态，预测下一时刻负荷）
+print_info "开始训练 (PSML multimodal, target=next load_power)..."
+print_info "  data_root=$DATA_ROOT"
+print_info "  zones=$ZONES"
 
-# 添加src路径
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
+EXTRA_ROWS=()
+if [ -n "$MAX_ROWS" ]; then
+    EXTRA_ROWS=(--max-rows-per-zone "$MAX_ROWS")
+fi
 
-from control.multimodal_control_network import (
-    MultimodalControlNetwork, ControlPretrainingLoss
-)
-from control.neuron_models import LeakyIntegrateFire, HodgkinHuxley
-from control.advanced_neuron_models import IzhikevichNeuronInterface, HybridNeuronNetwork
-
-
-def create_dummy_data(batch_size=32, seq_len=720, num_zones=66):
-    """创建虚拟数据（用于测试）"""
-    modalities = {
-        'load': torch.randn(batch_size, seq_len, num_zones),  # 负荷数据
-        'voltage': torch.randn(batch_size, seq_len, num_zones),  # 电压数据
-        'frequency': torch.randn(batch_size, seq_len, 1),  # 频率
-        'weather': torch.randn(batch_size, seq_len, 3),  # 温度、风速、光照
-        'time': torch.randn(batch_size, seq_len, 4),  # 小时、日期、周、季
-    }
-    return modalities
-
-
-def train_epoch(model, loss_fn, optimizer, dataloader, device):
-    """训练一个epoch"""
-    model.train()
-    total_loss = 0
-    losses_detail = {}
-    
-    for batch_idx, batch in enumerate(dataloader):
-        # 数据处理（示例）
-        modalities_data = {
-            'load': torch.randn(len(batch[0]), 720, 66).to(device),
-            'voltage': torch.randn(len(batch[0]), 720, 66).to(device),
-            'frequency': torch.randn(len(batch[0]), 720, 1).to(device),
-            'weather': torch.randn(len(batch[0]), 720, 3).to(device),
-            'time': torch.randn(len(batch[0]), 720, 4).to(device),
-        }
-        
-        # 前向传播
-        output = model(modalities_data)
-        
-        # 计算损失
-        original = modalities_data['load']
-        reconstructed = modalities_data['load']  # 实际应由模型输出
-        embeddings = output['final_representation'].unsqueeze(1)
-        control_actions = output['control_actions'].unsqueeze(1)
-        confidence = output['confidence']
-        
-        loss, loss_dict = loss_fn(
-            original, reconstructed, embeddings,
-            control_actions, confidence
-        )
-        
-        # 反向传播
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        
-        total_loss += loss.item()
-        
-        for k, v in loss_dict.items():
-            if k not in losses_detail:
-                losses_detail[k] = 0
-            losses_detail[k] += v
-        
-        if batch_idx % 10 == 0:
-            print(f"Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
-    
-    # 平均损失
-    avg_loss = total_loss / len(dataloader)
-    for k in losses_detail:
-        losses_detail[k] /= len(dataloader)
-    
-    return avg_loss, losses_detail
-
-
-def main():
-    parser = argparse.ArgumentParser(description='电网调控模型训练')
-    parser.add_argument('--model-type', default='multimodal', 
-                        choices=['multimodal', 'lif', 'izh', 'hybrid'],
-                        help='模型类型')
-    parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--batch-size', type=int, default=32)
-    parser.add_argument('--lr', type=float, default=0.001)
-    parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
-    parser.add_argument('--num-zones', type=int, default=66)
-    parser.add_argument('--seq-len', type=int, default=720)
-    args = parser.parse_args()
-    
-    device = torch.device(args.device)
-    print(f"使用设备: {device}")
-    
-    # 定义模态
-    modalities = {
-        'load': args.num_zones,  # 66个地区的负荷
-        'voltage': args.num_zones,  # 电压
-        'frequency': 1,  # 频率
-        'weather': 3,  # 天气
-        'time': 4,  # 时间特征
-    }
-    
-    # 创建模型
-    print(f"创建 {args.model_type} 模型...")
-    
-    if args.model_type == 'multimodal':
-        model = MultimodalControlNetwork(
-            modalities=modalities,
-            hidden_dim=64,
-            embedding_dim=32,
-            num_blocks=4,
-            num_control_outputs=5,
-            seq_len=args.seq_len
-        )
-    elif args.model_type == 'lif':
-        print("创建LIF神经元网络...")
-        # TODO: LIF具体实现
-        model = MultimodalControlNetwork(modalities, num_blocks=2)
-    elif args.model_type == 'izh':
-        print("创建Izhikevich神经元网络...")
-        # TODO: Izhikevich具体实现
-        model = MultimodalControlNetwork(modalities, num_blocks=2)
-    elif args.model_type == 'hybrid':
-        print("创建混合神经元网络...")
-        # TODO: 混合网络具体实现
-        model = MultimodalControlNetwork(modalities, num_blocks=4)
-    
-    model = model.to(device)
-    
-    # 损失函数和优化器
-    loss_fn = ControlPretrainingLoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
-    
-    # 创建虚拟数据加载器
-    print(f"创建数据加载器 (batch_size={args.batch_size})...")
-    dummy_dataset = TensorDataset(torch.randn(1000, args.seq_len, 66))
-    dataloader = DataLoader(dummy_dataset, batch_size=args.batch_size, shuffle=True)
-    
-    # 训练循环
-    history = {
-        'train_loss': [],
-        'lr': []
-    }
-    
-    print(f"\n开始训练 ({args.epochs} epochs)...")
-    print("=" * 50)
-    
-    for epoch in range(args.epochs):
-        avg_loss, loss_dict = train_epoch(model, loss_fn, optimizer, dataloader, device)
-        history['train_loss'].append(avg_loss)
-        history['lr'].append(optimizer.param_groups[0]['lr'])
-        
-        scheduler.step()
-        
-        if (epoch + 1) % 5 == 0:
-            print(f"Epoch {epoch + 1}/{args.epochs}")
-            print(f"  平均损失: {avg_loss:.4f}")
-            for k, v in loss_dict.items():
-                print(f"    {k}: {v:.4f}")
-            print(f"  学习率: {optimizer.param_groups[0]['lr']:.6f}")
-    
-    print("=" * 50)
-    print("训练完成!")
-    
-    # 保存模型和历史
-    print("\n保存检查点...")
-    torch.save(model.state_dict(), 'checkpoints/control_model.pth')
-    with open('outputs/training_history.json', 'w') as f:
-        json.dump(history, f, indent=2)
-    
-    print("✅ 所有文件已保存到 checkpoints/ 和 outputs/")
-
-
-if __name__ == '__main__':
-    main()
-
-PYTHON_SCRIPT
-
-# 运行训练
-print_info "开始训练..."
 python train_control.py \
     --model-type "$MODEL_TYPE" \
     --epochs "$EPOCHS" \
     --batch-size "$BATCH_SIZE" \
     --lr "$LR" \
-    --device "$DEVICE"
+    --device "$DEVICE" \
+    --data-root "$DATA_ROOT" \
+    --zones $ZONES \
+    --seq-len "$SEQ_LEN" \
+    --stride "$STRIDE" \
+    "${EXTRA_ROWS[@]}"
 
 if [ $? -eq 0 ]; then
     print_success "训练完成!"
@@ -294,6 +120,6 @@ print_success "    - HybridNeuronNetwork"
 print_success "    - 工厂函数和配置系统"
 print_info "=========================================="
 print_info "输出位置:"
-print_info "  模型: checkpoints/control_model.pth"
-print_info "  历史: outputs/training_history.json"
+print_info "  模型: checkpoints/control_model_psml.pth"
+print_info "  历史: outputs/training_history_psml.json"
 print_info "  代码: src/control/"

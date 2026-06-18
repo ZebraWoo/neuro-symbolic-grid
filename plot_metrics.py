@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-训练指标可视化脚本
-用于绘制AUC、Precision、Recall、F1、Silhouette等指标的训练曲线
+Training metrics visualization script.
+Plots training curves for AUC, Precision, Recall, F1, Silhouette, and summary stats.
 """
 
 import json
@@ -15,58 +15,58 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 设置中文字体和风格
+# Plot style
 sns.set_style("whitegrid")
-plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
 
 def plot_all_metrics(metrics_file='./results/metrics.json', output_dir='./results'):
-    """绘制所有指标"""
+    """Plot all available metrics."""
     
-    # 加载指标数据
+    # Load metrics
     metrics_path = Path(metrics_file)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
     if not metrics_path.exists():
-        logger.error(f"❌ 指标文件不存在: {metrics_path}")
-        logger.info("📌 请先运行 train_with_metrics.py 进行训练")
+        logger.error(f"[ERROR] Metrics file not found: {metrics_path}")
+        logger.info("[INFO] Run train_with_metrics.py first")
         return False
     
     with open(metrics_path, 'r') as f:
         metrics = json.load(f)
     
-    logger.info(f"✅ 已加载指标文件: {metrics_path}")
-    print("\n📊 检测到的指标：")
+    logger.info(f"[OK] Loaded metrics file: {metrics_path}")
+    print("\nDetected metrics:")
     for key in metrics.keys():
         if metrics[key]:
-            print(f"  ✓ {key}: {len(metrics[key])} 个数据点")
+            print(f"  - {key}: {len(metrics[key])} data points")
         else:
-            print(f"  ✗ {key}: 无数据")
+            print(f"  - {key}: no data")
     print()
     
-    # 1. 损失曲线（单独一个图）
+    # 1. Loss curves
     if metrics['train_loss'] and metrics['val_loss']:
         fig, ax = plt.subplots(figsize=(12, 6))
         epochs = range(1, len(metrics['train_loss']) + 1)
-        ax.plot(epochs, metrics['train_loss'], 'o-', label='训练损失', linewidth=2.5, markersize=6)
-        ax.plot(epochs, metrics['val_loss'], 's-', label='验证损失', linewidth=2.5, markersize=6)
+        ax.plot(epochs, metrics['train_loss'], 'o-', label='Train Loss', linewidth=2.5, markersize=6)
+        ax.plot(epochs, metrics['val_loss'], 's-', label='Validation Loss', linewidth=2.5, markersize=6)
         ax.set_xlabel('Epoch', fontsize=13, fontweight='bold')
         ax.set_ylabel('Loss', fontsize=13, fontweight='bold')
-        ax.set_title('训练和验证损失曲线', fontsize=15, fontweight='bold')
+        ax.set_title('Training and Validation Loss', fontsize=15, fontweight='bold')
         ax.legend(fontsize=12, loc='best')
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
-        plt.savefig(output_dir / '1_loss_curve.png', dpi=150, bbox_inches='tight')
+        plt.savefig(output_dir / 'loss_curve.png', dpi=150, bbox_inches='tight')
         plt.close()
-        logger.info("✅ 损失曲线已保存: loss_curve.png")
+        logger.info("[OK] Saved: loss_curve.png")
     
-    # 2. 评估指标 - 2x2 子图
+    # 2. Evaluation metrics
     metrics_to_plot = [
-        ('val_auc', 'AUC (Area Under Curve)', 'AUC分数', '#1f77b4'),
-        ('val_precision', 'Precision (精确率)', 'Precision', '#ff7f0e'),
-        ('val_recall', 'Recall (召回率)', 'Recall', '#2ca02c'),
+        ('val_auc', 'AUC (Area Under Curve)', 'AUC Score', '#1f77b4'),
+        ('val_precision', 'Precision', 'Precision', '#ff7f0e'),
+        ('val_recall', 'Recall', 'Recall', '#2ca02c'),
         ('val_f1', 'F1-Score', 'F1 Score', '#d62728'),
     ]
     
@@ -79,35 +79,35 @@ def plot_all_metrics(metrics_file='./results/metrics.json', output_dir='./result
             epochs = range(1, len(metrics[key]) + 1)
             ax.plot(epochs, metrics[key], 'o-', linewidth=2.5, markersize=6, color=color)
             ax.set_ylim([0, 1.05])
-            ax.axhline(y=0.5, color='red', linestyle='--', alpha=0.3, label='基准')
+            ax.axhline(y=0.5, color='red', linestyle='--', alpha=0.3, label='Baseline')
             ax.set_ylabel(ylabel, fontsize=11, fontweight='bold')
             ax.grid(True, alpha=0.3)
             ax.legend(fontsize=10)
             
-            # 显示最佳值和最终值
+            # Show best and final values
             best_val = max(metrics[key])
             best_epoch = metrics[key].index(best_val) + 1
             final_val = metrics[key][-1]
             
-            textstr = f'最佳: {best_val:.4f} (Epoch {best_epoch})\n最终: {final_val:.4f}'
+            textstr = f'Best: {best_val:.4f} (Epoch {best_epoch})\nFinal: {final_val:.4f}'
             ax.text(0.98, 0.05, textstr, transform=ax.transAxes, fontsize=10,
                    verticalalignment='bottom', horizontalalignment='right',
                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         else:
-            ax.text(0.5, 0.5, f'{key}\n未计算', ha='center', va='center', fontsize=12)
+            ax.text(0.5, 0.5, f'{key}\nNot available', ha='center', va='center', fontsize=12)
             ax.set_xticks([])
             ax.set_yticks([])
         
         ax.set_title(title, fontsize=12, fontweight='bold')
         ax.set_xlabel('Epoch', fontsize=11, fontweight='bold')
     
-    plt.suptitle('分类评估指标', fontsize=15, fontweight='bold')
+    plt.suptitle('Classification Metrics', fontsize=15, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(output_dir / '2_metrics_curve.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'metrics_curve.png', dpi=150, bbox_inches='tight')
     plt.close()
-    logger.info("✅ 评估指标曲线已保存: metrics_curve.png")
+    logger.info("[OK] Saved: metrics_curve.png")
     
-    # 3. 聚类和异常检测指标
+    # 3. Clustering and anomaly metrics
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     
     # Silhouette Score
@@ -122,128 +122,131 @@ def plot_all_metrics(metrics_file='./results/metrics.json', output_dir='./result
         best_val = max(metrics['val_silhouette'])
         best_epoch = metrics['val_silhouette'].index(best_val) + 1
         
-        textstr = f'最佳: {best_val:.4f} (Epoch {best_epoch})'
+        textstr = f'Best: {best_val:.4f} (Epoch {best_epoch})'
         axes[0].text(0.98, 0.05, textstr, transform=axes[0].transAxes, fontsize=10,
                    verticalalignment='bottom', horizontalalignment='right',
                    bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
     else:
-        axes[0].text(0.5, 0.5, 'Silhouette Score\n未计算', ha='center', va='center', fontsize=12)
+        axes[0].text(0.5, 0.5, 'Silhouette Score\nNot available', ha='center', va='center', fontsize=12)
         axes[0].set_xticks([])
         axes[0].set_yticks([])
     
-    axes[0].set_title('Silhouette Score (聚类质量)', fontsize=12, fontweight='bold')
+    axes[0].set_title('Silhouette Score', fontsize=12, fontweight='bold')
     axes[0].set_xlabel('Epoch', fontsize=11, fontweight='bold')
     
     # Proximity
     if metrics['train_proximity'] and metrics['val_proximity']:
         epochs = range(1, len(metrics['train_proximity']) + 1)
-        axes[1].plot(epochs, metrics['train_proximity'], 'o-', label='训练接近度', 
+        axes[1].plot(epochs, metrics['train_proximity'], 'o-', label='Train Proximity', 
                     linewidth=2.5, markersize=6)
-        axes[1].plot(epochs, metrics['val_proximity'], 's-', label='验证接近度', 
+        axes[1].plot(epochs, metrics['val_proximity'], 's-', label='Validation Proximity', 
                     linewidth=2.5, markersize=6)
         axes[1].set_ylabel('Proximity Score', fontsize=11, fontweight='bold')
         axes[1].legend(fontsize=11)
         axes[1].grid(True, alpha=0.3)
     else:
-        axes[1].text(0.5, 0.5, '接近度 (Proximity)\n未计算', ha='center', va='center', fontsize=12)
+        axes[1].text(0.5, 0.5, 'Proximity\nNot available', ha='center', va='center', fontsize=12)
         axes[1].set_xticks([])
         axes[1].set_yticks([])
     
-    axes[1].set_title('接近度 (异常检测指标)', fontsize=12, fontweight='bold')
+    axes[1].set_title('Proximity', fontsize=12, fontweight='bold')
     axes[1].set_xlabel('Epoch', fontsize=11, fontweight='bold')
     
-    plt.suptitle('聚类和异常检测指标', fontsize=15, fontweight='bold')
+    plt.suptitle('Clustering and Anomaly Metrics', fontsize=15, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(output_dir / '3_clustering_metrics.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'clustering_metrics.png', dpi=150, bbox_inches='tight')
     plt.close()
-    logger.info("✅ 聚类指标曲线已保存: clustering_metrics.png")
+    logger.info("[OK] Saved: clustering_metrics.png")
     
-    # 4. 统计信息总结
+    # 4. Summary report
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(111)
     ax.axis('off')
     
-    summary_text = "📊 训练统计总结\n" + "=" * 60 + "\n\n"
+    summary_text = "Training Summary Report\n" + "=" * 60 + "\n\n"
     
-    # 损失统计
+    # Loss statistics
     if metrics['train_loss']:
-        summary_text += "📈 损失指标:\n"
-        summary_text += f"  • 初始训练损失: {metrics['train_loss'][0]:.6f}\n"
-        summary_text += f"  • 最终训练损失: {metrics['train_loss'][-1]:.6f}\n"
-        summary_text += f"  • 改善幅度: {(metrics['train_loss'][0] - metrics['train_loss'][-1]) / metrics['train_loss'][0] * 100:.2f}%\n"
-        summary_text += f"  • 最低验证损失: {min(metrics['val_loss']):.6f}\n"
-        summary_text += f"  • 最低值出现轮数: Epoch {metrics['val_loss'].index(min(metrics['val_loss'])) + 1}\n\n"
+        improvement = 0.0
+        if metrics['train_loss'][0] != 0:
+            improvement = (metrics['train_loss'][0] - metrics['train_loss'][-1]) / metrics['train_loss'][0] * 100
+        summary_text += "Loss Metrics:\n"
+        summary_text += f"  - Initial train loss: {metrics['train_loss'][0]:.6e}\n"
+        summary_text += f"  - Final train loss: {metrics['train_loss'][-1]:.6e}\n"
+        summary_text += f"  - Improvement: {improvement:.2f}%\n"
+        summary_text += f"  - Best validation loss: {min(metrics['val_loss']):.6e}\n"
+        summary_text += f"  - Best epoch: {metrics['val_loss'].index(min(metrics['val_loss'])) + 1}\n\n"
     
-    # AUC统计
+    # AUC statistics
     if metrics['val_auc']:
-        summary_text += "🎯 AUC指标:\n"
-        summary_text += f"  • 最高AUC: {max(metrics['val_auc']):.4f}\n"
-        summary_text += f"  • 最低AUC: {min(metrics['val_auc']):.4f}\n"
-        summary_text += f"  • 平均AUC: {np.mean(metrics['val_auc']):.4f}\n"
-        summary_text += f"  • 最终AUC: {metrics['val_auc'][-1]:.4f}\n\n"
+        summary_text += "AUC Metrics:\n"
+        summary_text += f"  - Best AUC: {max(metrics['val_auc']):.4f}\n"
+        summary_text += f"  - Worst AUC: {min(metrics['val_auc']):.4f}\n"
+        summary_text += f"  - Mean AUC: {np.mean(metrics['val_auc']):.4f}\n"
+        summary_text += f"  - Final AUC: {metrics['val_auc'][-1]:.4f}\n\n"
     
-    # Precision/Recall/F1统计
+    # Precision / Recall / F1 statistics
     if metrics['val_precision']:
-        summary_text += "📐 分类指标:\n"
-        summary_text += f"  • Precision: {metrics['val_precision'][-1]:.4f} (最高: {max(metrics['val_precision']):.4f})\n"
+        summary_text += "Classification Metrics:\n"
+        summary_text += f"  - Precision: {metrics['val_precision'][-1]:.4f} (best: {max(metrics['val_precision']):.4f})\n"
     if metrics['val_recall']:
-        summary_text += f"  • Recall: {metrics['val_recall'][-1]:.4f} (最高: {max(metrics['val_recall']):.4f})\n"
+        summary_text += f"  - Recall: {metrics['val_recall'][-1]:.4f} (best: {max(metrics['val_recall']):.4f})\n"
     if metrics['val_f1']:
-        summary_text += f"  • F1-Score: {metrics['val_f1'][-1]:.4f} (最高: {max(metrics['val_f1']):.4f})\n\n"
+        summary_text += f"  - F1-Score: {metrics['val_f1'][-1]:.4f} (best: {max(metrics['val_f1']):.4f})\n\n"
     
-    # Silhouette统计
+    # Silhouette statistics
     if metrics['val_silhouette']:
-        summary_text += "🔷 聚类质量 (Silhouette):\n"
-        summary_text += f"  • 最高分数: {max(metrics['val_silhouette']):.4f}\n"
-        summary_text += f"  • 最低分数: {min(metrics['val_silhouette']):.4f}\n"
-        summary_text += f"  • 平均分数: {np.mean(metrics['val_silhouette']):.4f}\n"
-        summary_text += f"  • 最终分数: {metrics['val_silhouette'][-1]:.4f}\n\n"
+        summary_text += "Silhouette Metrics:\n"
+        summary_text += f"  - Best score: {max(metrics['val_silhouette']):.4f}\n"
+        summary_text += f"  - Worst score: {min(metrics['val_silhouette']):.4f}\n"
+        summary_text += f"  - Mean score: {np.mean(metrics['val_silhouette']):.4f}\n"
+        summary_text += f"  - Final score: {metrics['val_silhouette'][-1]:.4f}\n\n"
     
-    # 接近度统计
+    # Proximity statistics
     if metrics['val_proximity']:
-        summary_text += "📍 接近度 (异常检测):\n"
-        summary_text += f"  • 训练接近度: {metrics['train_proximity'][-1]:.4f}\n"
-        summary_text += f"  • 验证接近度: {metrics['val_proximity'][-1]:.4f}\n"
-        summary_text += f"  • 平均验证接近度: {np.mean(metrics['val_proximity']):.4f}\n\n"
+        summary_text += "Proximity Metrics:\n"
+        summary_text += f"  - Final train proximity: {metrics['train_proximity'][-1]:.4f}\n"
+        summary_text += f"  - Final validation proximity: {metrics['val_proximity'][-1]:.4f}\n"
+        summary_text += f"  - Mean validation proximity: {np.mean(metrics['val_proximity']):.4f}\n\n"
     
     summary_text += "=" * 60 + "\n"
-    summary_text += "✅ 训练完成！所有指标已保存。"
+    summary_text += "Training complete. All metrics have been saved."
     
     ax.text(0.05, 0.95, summary_text, transform=ax.transAxes, fontsize=11,
            verticalalignment='top', horizontalalignment='left', family='monospace',
            bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.3))
     
     plt.tight_layout()
-    plt.savefig(output_dir / '4_summary_report.png', dpi=150, bbox_inches='tight')
+    plt.savefig(output_dir / 'summary_report.png', dpi=150, bbox_inches='tight')
     plt.close()
-    logger.info("✅ 总结报告已保存: summary_report.png")
+    logger.info("[OK] Saved: summary_report.png")
     
     return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description='训练指标可视化')
+    parser = argparse.ArgumentParser(description='Training metrics visualization')
     parser.add_argument('--metrics-file', type=str, default='./results/metrics.json',
-                       help='指标JSON文件路径')
+                       help='Metrics JSON path')
     parser.add_argument('--output-dir', type=str, default='./results',
-                       help='输出目录')
+                       help='Output directory')
     
     args = parser.parse_args()
     
-    print("🎨 开始生成训练指标可视化...\n")
+    print("Generating training metric visualizations...\n")
     
     success = plot_all_metrics(args.metrics_file, args.output_dir)
     
     if success:
-        print("\n✅ 可视化完成！")
-        print(f"📁 输出目录: {args.output_dir}")
-        print("\n生成的图表:")
-        print("  1. 1_loss_curve.png - 训练和验证损失曲线")
-        print("  2. 2_metrics_curve.png - AUC、Precision、Recall、F1曲线")
-        print("  3. 3_clustering_metrics.png - Silhouette和接近度曲线")
-        print("  4. 4_summary_report.png - 统计总结报告")
+        print("\nVisualization complete.")
+        print(f"Output directory: {args.output_dir}")
+        print("\nGenerated files:")
+        print("  1. loss_curve.png - Training and validation loss")
+        print("  2. metrics_curve.png - AUC, Precision, Recall, F1")
+        print("  3. clustering_metrics.png - Silhouette and proximity")
+        print("  4. summary_report.png - Summary report")
     else:
-        print("\n❌ 可视化失败")
+        print("\nVisualization failed")
 
 
 if __name__ == "__main__":

@@ -10,6 +10,46 @@ from typing import Tuple, Optional
 import numpy as np
 
 
+class SurrogateSpike(torch.autograd.Function):
+    """Heaviside forward + triangular surrogate gradient (same as demo/snn_mlp)."""
+
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, threshold: float) -> torch.Tensor:
+        ctx.save_for_backward(x)
+        ctx.threshold = threshold
+        return (x >= threshold).float()
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        (x,) = ctx.saved_tensors
+        th = ctx.threshold
+        grad_x = grad_output * torch.clamp(1.0 - (x - th).abs(), min=0.0)
+        return grad_x, None
+
+
+class TemporalLIF(nn.Module):
+    """
+    Batched LIF over a sequence: input (batch, seq_len, dim) -> spikes (batch, seq_len, dim).
+    No cross-batch membrane state; safe for DDP and backprop.
+    """
+
+    def __init__(self, threshold: float = 1.0, leak: float = 0.9):
+        super().__init__()
+        self.threshold = threshold
+        self.leak = leak
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        batch_size, seq_len, dim = x.shape
+        mem = torch.zeros(batch_size, dim, device=x.device, dtype=x.dtype)
+        spikes = []
+        for t in range(seq_len):
+            mem = self.leak * mem + x[:, t, :]
+            spk = SurrogateSpike.apply(mem, self.threshold)
+            mem = mem * (1.0 - spk)
+            spikes.append(spk.unsqueeze(1))
+        return torch.cat(spikes, dim=1)
+
+
 class LeakyIntegrateFire(nn.Module):
     """
     泄漏积分发火神经元（LIF）- 最常用的脉冲神经元
