@@ -455,12 +455,21 @@ def create_dataloaders(data_root, zones, batch_size=32, val_split=0.2):
     Returns:
         train_loader, val_loader: 训练和验证数据加载器
     """
+    import pandas as pd
     from torch.utils.data import random_split
+    
+    def collate_fn(batch):
+        """合并数据和信息"""
+        sequences = []
+        for x, info in batch:
+            sequences.append(torch.FloatTensor(x))
+        return torch.stack(sequences)
     
     loader = LoadRenewableDataLoader(data_root)
     # 加载所有地区的数据
     all_zones_data = loader.load_all_zones()
-    data = all_zones_data
+    # 合并所有区域数据为一个DataFrame
+    data = pd.concat(list(all_zones_data.values()), axis=0, ignore_index=True)
     
     dataset = TimeSeriesDataset(data, seq_len=720)
     
@@ -469,8 +478,8 @@ def create_dataloaders(data_root, zones, batch_size=32, val_split=0.2):
     train_size = len(dataset) - val_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
     
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, collate_fn=collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=collate_fn)
     
     logger.info(f"✅ 数据加载器创建完成")
     logger.info(f"   训练集: {len(train_dataset)} samples")

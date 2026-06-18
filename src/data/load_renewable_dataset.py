@@ -123,6 +123,9 @@ class TimeSeriesDataset:
         self.seq_len = seq_len
         self.stride = stride
         
+        # 只选择数值列
+        data = data.select_dtypes(include=['number'])
+        
         # 归一化
         if normalize == 'zscore':
             self.data = (data - data.mean()) / (data.std() + 1e-8)
