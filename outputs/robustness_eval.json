@@ -1,0 +1,30 @@
+{
+  "clean": {
+    "lstm": 0.06,
+    "transformer": 0.0437,
+    "tcn": 0.0621,
+    "snn_lif": 0.0711,
+    "gors_full": 0.3529
+  },
+  "noise": {
+    "lstm": 0.0603,
+    "transformer": 0.0449,
+    "tcn": 0.0635,
+    "snn_lif": 0.0703,
+    "gors_full": 0.3543
+  },
+  "missing": {
+    "lstm": 0.0742,
+    "transformer": 0.1329,
+    "tcn": 0.1093,
+    "snn_lif": 0.0905,
+    "gors_full": 0.327
+  },
+  "extreme": {
+    "lstm": 0.0926,
+    "transformer": 0.0695,
+    "tcn": 0.0985,
+    "snn_lif": 0.1092,
+    "gors_full": 0.3546
+  }
+}

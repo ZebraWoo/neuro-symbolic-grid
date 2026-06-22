@@ -1,0 +1,26 @@
+2026-06-20 13:37:42,214 - INFO - Loading 8 zones...
+2026-06-20 13:37:42,215 - INFO - Loading ERCOT_zone_1_ from ERCOT_zone_1_.csv
+2026-06-20 13:37:42,309 - INFO -   rows=50000, features=11
+2026-06-20 13:37:42,309 - INFO - Loading ERCOT_zone_2_ from ERCOT_zone_2_.csv
+2026-06-20 13:37:42,395 - INFO -   rows=50000, features=11
+2026-06-20 13:37:42,395 - INFO - Loading ERCOT_zone_3_ from ERCOT_zone_3_.csv
+2026-06-20 13:37:42,474 - INFO -   rows=50000, features=11
+2026-06-20 13:37:42,474 - INFO - Loading ERCOT_zone_4_ from ERCOT_zone_4_.csv
+2026-06-20 13:37:42,556 - INFO -   rows=50000, features=11
+2026-06-20 13:37:42,556 - INFO - Loading MISO_zone_1_ from MISO_zone_1_.csv
+2026-06-20 13:37:42,639 - INFO -   rows=50000, features=11
+2026-06-20 13:37:42,639 - INFO - Loading MISO_zone_2_ from MISO_zone_2_.csv
+2026-06-20 13:37:42,719 - INFO -   rows=50000, features=11
+2026-06-20 13:37:42,719 - INFO - Loading MISO_zone_3_ from MISO_zone_3_.csv
+2026-06-20 13:37:42,799 - INFO -   rows=50000, features=11
+2026-06-20 13:37:42,799 - INFO - Loading MISO_zone_4_ from MISO_zone_4_.csv
+2026-06-20 13:37:42,882 - INFO -   rows=50000, features=11
+2026-06-20 13:37:42,906 - INFO - Train: 105 batches, Val: 27 batches
+2026-06-20 13:37:43,628 - INFO - Model: 0.0M params
+2026-06-20 13:37:46,548 - INFO - Epoch   1 | Val RMSE=0.0927 (best=0.0927)
+2026-06-20 13:38:03,868 - INFO - Epoch  10 | Val RMSE=0.0877 (best=0.0838)
+2026-06-20 13:38:23,163 - INFO - Epoch  20 | Val RMSE=0.0893 (best=0.0838)
+2026-06-20 13:38:42,277 - INFO - Epoch  30 | Val RMSE=0.0939 (best=0.0838)
+2026-06-20 13:39:01,370 - INFO - Epoch  40 | Val RMSE=0.0929 (best=0.0838)
+2026-06-20 13:39:20,574 - INFO - Epoch  50 | Val RMSE=0.0939 (best=0.0838)
+2026-06-20 13:39:20,574 - INFO - Done. Best RMSE=0.0838
