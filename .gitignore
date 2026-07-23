@@ -1,0 +1,31 @@
+# Model checkpoints (too large, train or download separately)
+checkpoints/
+
+# Output files
+outputs/
+results/paper_figures/
+
+# Training logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+
+# Data (users download separately)
+data/
+*.csv
+
+# IDE
+.vscode/
+.idea/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Paper drafts & PDFs
+txt/
